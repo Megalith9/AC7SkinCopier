@@ -3,7 +3,7 @@ import os
 import re
 import subprocess
 import tkinter as tk
-from tkinter import filedialog, messagebox, scrolledtext
+from tkinter import filedialog, messagebox, scrolledtext, ttk
 
 CONFIG_FILE = "config.json"
 
@@ -104,7 +104,7 @@ def convert_with_uassetgui(json_path, exe_path, log_widget):
         log_widget.see(tk.END)
 
 # ---------------- Main JSON processing ----------------
-def process_json_file(filepath, new_xxxx, yy_end, exe_path, log_widget):
+def process_json_file(filepath, new_xxxx, yy_start, yy_end, exe_path, log_widget, progress_bar):
     with open(filepath, "r", encoding="utf-8") as f:
         original_data = json.load(f)
 
@@ -113,7 +113,11 @@ def process_json_file(filepath, new_xxxx, yy_end, exe_path, log_widget):
         messagebox.showerror("Error", "Could not detect the PlaneID and SkinID pattern in the file.")
         return
 
-    for yy in range(1, int(yy_end) + 1):
+    total = int(yy_end) - int(yy_start) + 1
+    progress_bar["maximum"] = total
+    progress_bar["value"] = 0
+
+    for idx, yy in enumerate(range(int(yy_start), int(yy_end) + 1), start=1):
         new_yy = f"{yy:02d}"
         new_data = json.loads(json.dumps(original_data))
         new_data = replace_patterns(new_data, old_xxxx, new_xxxx, old_yy, new_yy)
@@ -142,7 +146,11 @@ def process_json_file(filepath, new_xxxx, yy_end, exe_path, log_widget):
                 log_widget.insert(tk.END, f"⚠️ Could not delete {out_path}: {e}\n")
                 log_widget.see(tk.END)
 
-    messagebox.showinfo("Done", f"Files generated and converted from s01 to s{yy_end}.")
+        # Update progress bar
+        progress_bar["value"] = idx
+        progress_bar.update()
+
+    messagebox.showinfo("Done", f"Files generated and converted from s{yy_start} to s{yy_end}.")
 
 # ---------------- GUI ----------------
 def select_file(entry):
@@ -171,29 +179,38 @@ def main():
     entry_xxxx = tk.Entry(root)
     entry_xxxx.grid(row=1, column=1)
 
-    tk.Label(root, text="SkinID number (e.g. 05):").grid(row=2, column=0, sticky="e")
-    entry_yy_end = tk.Entry(root)
-    entry_yy_end.grid(row=2, column=1)
+    tk.Label(root, text="Min SkinID (e.g. 02):").grid(row=2, column=0, sticky="e")
+    entry_yy_start = tk.Entry(root)
+    entry_yy_start.grid(row=2, column=1)
 
-    tk.Label(root, text="UAssetGUI.exe path:").grid(row=3, column=0, sticky="e")
+    tk.Label(root, text="Max SkinID (e.g. 09):").grid(row=3, column=0, sticky="e")
+    entry_yy_end = tk.Entry(root)
+    entry_yy_end.grid(row=3, column=1)
+
+    tk.Label(root, text="UAssetGUI.exe path:").grid(row=4, column=0, sticky="e")
     entry_exe = tk.Entry(root, width=50)
-    entry_exe.grid(row=3, column=1)
-    tk.Button(root, text="Browse...", command=lambda: select_exe(entry_exe)).grid(row=3, column=2)
+    entry_exe.grid(row=4, column=1)
+    tk.Button(root, text="Browse...", command=lambda: select_exe(entry_exe)).grid(row=4, column=2)
 
     # Load last saved path automatically
     entry_exe.insert(0, load_config())
 
+    # Progress bar
+    progress_bar = ttk.Progressbar(root, orient="horizontal", length=400, mode="determinate")
+    progress_bar.grid(row=5, column=0, columnspan=3, pady=5)
+
     # Log box
     log_box = scrolledtext.ScrolledText(root, width=80, height=20, state="normal")
-    log_box.grid(row=5, column=0, columnspan=3, padx=5, pady=5)
+    log_box.grid(row=7, column=0, columnspan=3, padx=5, pady=5)
 
     def run():
         filepath = entry_file.get()
         new_xxxx = entry_xxxx.get().strip()
+        yy_start = entry_yy_start.get().strip()
         yy_end = entry_yy_end.get().strip()
         exe_path = entry_exe.get().strip()
 
-        if not (filepath and new_xxxx and yy_end and exe_path):
+        if not (filepath and new_xxxx and yy_start and yy_end and exe_path):
             messagebox.showerror("Error", "Please complete all fields.")
             return
 
@@ -201,17 +218,21 @@ def main():
             messagebox.showerror("Error", "PlaneID must contain only letters, numbers, and underscores.")
             return
 
-        if not yy_end.isdigit() or int(yy_end) < 1:
-            messagebox.showerror("Error", "Final SkinID must be greater than or equal to 01.")
+        if not yy_start.isdigit() or not yy_end.isdigit():
+            messagebox.showerror("Error", "SkinID values must be numbers.")
+            return
+
+        if int(yy_start) < 1 or int(yy_end) < int(yy_start):
+            messagebox.showerror("Error", "Invalid SkinID range.")
             return
 
         if not os.path.exists(exe_path):
             messagebox.showerror("Error", "Invalid UAssetGUI.exe path.")
             return
 
-        process_json_file(filepath, new_xxxx, yy_end, exe_path, log_box)
+        process_json_file(filepath, new_xxxx, yy_start, yy_end, exe_path, log_box, progress_bar)
 
-    tk.Button(root, text="Generate files", command=run).grid(row=4, column=1, pady=10)
+    tk.Button(root, text="Generate files", command=run).grid(row=6, column=1, pady=10)
     root.mainloop()
 
 
