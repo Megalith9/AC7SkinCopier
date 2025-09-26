@@ -103,6 +103,36 @@ def convert_with_uassetgui(json_path, exe_path, log_widget):
         log_widget.insert(tk.END, f"❌ Error converting {json_path}: {e}\n")
         log_widget.see(tk.END)
 
+# ---------------- Prepare input (accept .json or .uasset) ----------------
+def prepare_input_file(filepath, exe_path, log_widget, engine_version="23", mappings=None):
+    """
+    Ensures we always get a JSON file back.
+    If the input is .json -> return as-is.
+    If the input is .uasset -> convert it to JSON via UAssetGUI.
+    """
+    if filepath.lower().endswith(".json"):
+        return filepath  # Already JSON
+
+    if filepath.lower().endswith(".uasset"):
+        temp_json = filepath.replace(".uasset", "_temp.json")
+        cmd = [exe_path, "tojson", filepath, temp_json, engine_version]
+        if mappings:
+            cmd.append(mappings)
+
+        try:
+            log_widget.insert(tk.END, f"Converting {os.path.basename(filepath)} to JSON...\n")
+            log_widget.see(tk.END)
+            subprocess.run(cmd, check=True)
+            log_widget.insert(tk.END, f"✅ Converted to {os.path.basename(temp_json)}\n")
+            log_widget.see(tk.END)
+            return temp_json
+        except subprocess.CalledProcessError as e:
+            messagebox.showerror("Error", f"Failed to convert {filepath} to JSON:\n{e}")
+            return None
+
+    messagebox.showerror("Error", f"Unsupported file type: {filepath}")
+    return None
+
 # ---------------- Main JSON processing ----------------
 def process_json_file(filepath, new_xxxx, yy_start, yy_end, exe_path, log_widget, progress_bar):
     with open(filepath, "r", encoding="utf-8") as f:
@@ -154,7 +184,7 @@ def process_json_file(filepath, new_xxxx, yy_start, yy_end, exe_path, log_widget
 
 # ---------------- GUI ----------------
 def select_file(entry):
-    filename = filedialog.askopenfilename(filetypes=[("JSON files", "*.json")])
+    filename = filedialog.askopenfilename(filetypes=[("UAsset/JSON files", "*.uasset;*.json")])
     if filename:
         entry.delete(0, tk.END)
         entry.insert(0, filename)
@@ -170,7 +200,7 @@ def main():
     root = tk.Tk()
     root.title("MegaSkinCopier JSON/UAsset Generator")
 
-    tk.Label(root, text="Base JSON file:").grid(row=0, column=0, sticky="e")
+    tk.Label(root, text="Base file (.json or .uasset):").grid(row=0, column=0, sticky="e")
     entry_file = tk.Entry(root, width=50)
     entry_file.grid(row=0, column=1)
     tk.Button(root, text="Browse...", command=lambda: select_file(entry_file)).grid(row=0, column=2)
@@ -230,7 +260,11 @@ def main():
             messagebox.showerror("Error", "Invalid UAssetGUI.exe path.")
             return
 
-        process_json_file(filepath, new_xxxx, yy_start, yy_end, exe_path, log_box, progress_bar)
+        json_file = prepare_input_file(filepath, exe_path, log_box)
+        if json_file:
+            process_json_file(json_file, new_xxxx, yy_start, yy_end, exe_path, log_box, progress_bar)
+            if json_file.endswith("_temp.json") and os.path.exists(json_file):
+                os.remove(json_file)  # Clean up temporary file
 
     tk.Button(root, text="Generate files", command=run).grid(row=6, column=1, pady=10)
     root.mainloop()
