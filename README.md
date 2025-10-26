@@ -1,4 +1,4 @@
-# MegaAC7-SkinCopier
+# AC7SkinCopier
 A tool capable of duplicating Ace Combat 7's Skin Pawns to simplify the modding process.
 
 ## Functionality
